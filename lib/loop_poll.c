@@ -471,13 +471,27 @@ _handle_real_signal_(int signal_num, siginfo_t * si, void *context)
 	int32_t res = 0;
 
 	if (pipe_fds[1] > 0) {
-try_again:
-		res = write(pipe_fds[1], &sig, sizeof(int32_t));
-		if (res == -1 && errno == EAGAIN) {
-			goto try_again;
-		} else if (res != sizeof(int32_t)) {
-			qb_util_log(LOG_ERR,
-				    "failed to write signal to pipe [%d]", res);
+		ssize_t written = 0, to_write = sizeof(int32_t);
+		char *buffer = (char*)&sig;
+
+		while (written < to_write) {
+			ssize_t result;
+			if ((result = write(pipe_fds[1], buffer, to_write - written)) < 0) {
+				if (errno == EAGAIN) {
+					struct pollfd pfd = { .fd = pipe_fds[1], .events = POLLOUT };
+					if (poll(&pfd, 1, -1) <= 0 && errno != EAGAIN) {
+						qb_util_log(LOG_ERR,
+							    "failed to write signal to pipe [%d] - cannot poll", res);
+						break;
+					}
+					continue;
+				}
+				qb_util_log(LOG_ERR,
+					    "failed to write signal to pipe [%d]", res);
+				return;
+			}
+			written += result;
+			buffer += result;
 		}
 	}
 	qb_util_log(LOG_TRACE, "got real signal [%d] sent to pipe", sig);
