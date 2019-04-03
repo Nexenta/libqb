@@ -701,6 +701,8 @@ send_response:
 		} else if (res == -EAGAIN) {
 			qb_util_log(LOG_WARNING, "Denied connection, is not ready (%s)",
 				    c->description);
+			//  restart corosync as a service and try again
+			exit(-1);
 		} else {
 			errno = -res;
 			qb_util_perror(LOG_ERR,
